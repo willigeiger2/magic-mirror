@@ -137,11 +137,20 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 			return;
 		}
 
+		// Create video element (declared early so resizeCanvas can reference it)
+		const video = document.createElement('video');
+		video.setAttribute('autoplay', 'true');
+		video.setAttribute('playsinline', 'true');
+
 		// Set canvas size to window size
 		function resizeCanvas() {
 			canvas.width = window.innerWidth;
 			canvas.height = window.innerHeight;
 			gl.viewport(0, 0, canvas.width, canvas.height);
+			// Update texture coords when canvas resizes (if video is loaded)
+			if (video && video.videoWidth > 0) {
+				updateTexCoords(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
+			}
 		}
 		resizeCanvas();
 		window.addEventListener('resize', resizeCanvas);
@@ -183,17 +192,52 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 			 1,  1,
 		]), gl.STATIC_DRAW);
 
-		// Create texture coordinate buffer
+		// Create texture coordinate buffer (flipped horizontally for mirror effect)
 		const texCoordBuffer = gl.createBuffer();
+		
+		// Initialize with default mirrored coords
 		gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+			1, 1,
 			0, 1,
-			1, 1,
-			0, 0,
-			0, 0,
-			1, 1,
 			1, 0,
+			1, 0,
+			0, 1,
+			0, 0,
 		]), gl.STATIC_DRAW);
+		
+		// Function to update texture coordinates based on aspect ratios (for cropping)
+		function updateTexCoords(videoWidth, videoHeight, canvasWidth, canvasHeight) {
+			const videoAspect = videoWidth / videoHeight;
+			const canvasAspect = canvasWidth / canvasHeight;
+			
+			let u0 = 0, u1 = 1, v0 = 0, v1 = 1;
+			
+			if (canvasAspect > videoAspect) {
+				// Canvas is wider - crop top/bottom of video
+				const scale = canvasAspect / videoAspect;
+				const offset = (1 - 1 / scale) / 2;
+				v0 = offset;
+				v1 = 1 - offset;
+			} else {
+				// Canvas is taller - crop left/right of video
+				const scale = videoAspect / canvasAspect;
+				const offset = (1 - 1 / scale) / 2;
+				u0 = offset;
+				u1 = 1 - offset;
+			}
+			
+			// Apply texture coords (flip horizontally for mirror by swapping u0/u1)
+			gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+				u1, v1,  // bottom-right -> bottom-left (flipped)
+				u0, v1,  // bottom-left -> bottom-right (flipped)
+				u1, v0,  // top-right -> top-left (flipped)
+				u1, v0,  // top-right -> top-left (flipped)
+				u0, v1,  // bottom-left -> bottom-right (flipped)
+				u0, v0,  // top-left -> top-right (flipped)
+			]), gl.STATIC_DRAW);
+		}
 
 		// Create texture
 		const texture = gl.createTexture();
@@ -204,14 +248,14 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
 		// Get webcam stream
-		const video = document.createElement('video');
-		video.setAttribute('autoplay', 'true');
-		video.setAttribute('playsinline', 'true');
-
 		navigator.mediaDevices.getUserMedia({ video: true, audio: false })
 			.then(stream => {
 				video.srcObject = stream;
 				video.play();
+				// Update texture coords when video metadata is loaded
+				video.addEventListener('loadedmetadata', () => {
+					updateTexCoords(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
+				});
 			})
 			.catch(err => {
 				console.error('Error accessing webcam:', err);
