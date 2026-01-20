@@ -124,7 +124,11 @@ void main() {
     // Cycle through the available transition effects.
     //float effectId = mod(floor(iTime / clipDuration + 0.5), 11.0);
     float effectId = 11.0;
-    
+ 
+	if (u_distortionSpeed > 0.0) {
+		effectId = mod(floor(0.005 * u_time * u_distortionSpeed + 0.5), 12.0);
+	}
+   
     // Normalized pixel coordinates (from 0 to 1).
 	vec2 uv = v_texCoord;
     //vec2 uv = fragCoord/iResolution.xy;
