@@ -110,7 +110,7 @@ float smoke(vec2 uv, float t) {
     float dx = fractal(vec3(uv_warp, 0.0 * 0.02 * t + 0.0), warpScale, 0.52, 2.0) - 0.5;
     float dy = fractal(vec3(uv_warp, 0.0 * 0.02 * t + 7.7), warpScale, 0.52, 2.0) - 0.5;
     uv += vec2(warpGain * dx, warpGain * dy);
-    uv.y +=  0.07 * t;
+    uv.y +=  0.17 * t;
     float v = 0.7 * fractal(vec3(uv, 0.03 * t), 0.5, 0.55, 2.0);
     return v;
 }
@@ -253,7 +253,7 @@ void main() {
     
     else if (effectId == 9.0) {
 		// Wet. Fractal-varying blur with downward motion.
-		vec3 fractalCoord = vec3(uv.x, 0.5 * uv.y - 0.2 * effectTime, 0.257 * effectTime + 0.0);
+		vec3 fractalCoord = vec3(2.0 * uv.x, uv.y - 0.2 * effectTime, 0.257 * effectTime + 0.0);
 		float blurAmount = 2.0 * (fractal(fractalCoord, 0.35, 0.5, 2.0) - 0.5);
         fragColor = cosblur(uv, vec2(0.2 * effectAmount * blurAmount));
     }
