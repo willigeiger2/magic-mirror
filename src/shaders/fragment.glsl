@@ -2,9 +2,9 @@ precision mediump float;
 varying vec2 v_texCoord;
 uniform sampler2D u_texture;
 uniform float u_time;
-uniform float u_distortionAmount;
-uniform float u_distortionSpeed;
-uniform float u_colorShift;
+uniform float u_effectStrength;
+uniform float u_effectSpeed;
+uniform float u_effectId;
 
 #define PI 3.141593
 #define FRACTAL_OCTAVES 5.0
@@ -116,34 +116,30 @@ float smoke(vec2 uv, float t) {
 }
 
 void main() {
-    // Time between transitions in seconds.
-    const float clipDuration = 2.0;
-    // Length of each transition in seconds.
-    const float transDuration = 0.75;
+	// Map the effect speed parameter to get a larger, logarithmic range and generate a scaled time value.
+	float effectSpeed = u_effectSpeed / 100.0;
+	const float logSpeedScale = 10.0;
+	effectSpeed = 0.5 * exp(logSpeedScale * effectSpeed) / exp(logSpeedScale * 0.5);
+	float effectTime = u_time * effectSpeed;
     
-    // Cycle through the available transition effects.
-    //float effectId = mod(floor(iTime / clipDuration + 0.5), 11.0);
-    float effectId = 2.0;
- 
-	//effectId = mod(floor(0.005 * u_time * u_distortionSpeed + effectId + 0.5), 12.0);
+    // Normalized (0..1 effect strength)
+	float effectAmount = u_effectStrength / 100.0;
+    
+    // Effect selection: use u_effectId from uniform
+    // If u_effectId is -1.0, cycle through all effects
+    float effectId = u_effectId;
+    if (u_effectId < 0.0) {
+        effectId = mod(floor(0.5 * u_time * effectSpeed + 0.5), 12.0);
+    }
    
     // Normalized pixel coordinates (from 0 to 1).
 	vec2 uv = v_texCoord;
-    //vec2 uv = fragCoord/iResolution.xy;
-
 	vec4 fragColor = texture2D(u_texture, uv);
     
-    float t = u_time;
     // For some effects, modulate time with noise for extra glitchiness.
     if (effectId == 0.0 || effectId == 3.0) {
-        t += 0.25 * transDuration * (rand(quantize(t, 0.157)) - 0.5);
+        effectTime += 0.2 * (rand(quantize(effectTime, 0.157)) - 0.5);
 	}
-    
-    // Used for effect animation.
-	float effectTime = t * u_distortionSpeed / 100.0;
-    
-    // Normalized (0..1 effect intensity)
-	float effectAmount = u_distortionAmount / 100.0;
     
     if (effectId == 0.0) {
 		float scalineDistortion = 1.0 * 0.008;
@@ -152,8 +148,6 @@ void main() {
 		float negative = 1.0;
 		float scanlines = 2.0;
         uv.x += effectAmount * scalineDistortion * cos(400.0 * uv.y + 10.0 * effectTime);
-        //uv.x += effectAmount * scanError * cos(5.0 * effectTime) *
-		//	(mod(0.1 * effectTime * uv.y + 0.0 * effectTime, 0.2) - 0.1);
 		uv.x += effectAmount * scanError * (mod(uv.y + effectTime, 0.2) - 0.1);
         uv.y += effectAmount * verticalShake * (rand(floor(10.0 * effectTime)) - 0.5);
         fragColor = lookup(u_texture, uv);
@@ -165,7 +159,7 @@ void main() {
     }
     
     else if (effectId == 1.0) {
-		// Smear: 
+		// Smear. Sinusoisal distortion with directional blur.
 		vec2 streak;
 		streak.x = 0.1 * effectAmount * cos(7.0 * uv.y + 1.7 * effectTime);
         streak.y = 0.1 * effectAmount * cos(7.0 * uv.x + 2.9 * effectTime);
@@ -174,7 +168,7 @@ void main() {
     }
     
     else if (effectId == 2.0) {
-		// Projector: Random streaking from image center.
+		// Projector: Varying directional blur.
         vec2 streak = uv - vec2(0.5, 0.5);
         streak += vec2(cos(3.8 * effectTime), cos(2.3 * effectTime));
         float ditherAmount = rand(quantize(effectTime, 0.44));
@@ -183,7 +177,7 @@ void main() {
     }
 
     else if (effectId == 3.0) {
-		// Unlock: Scanline break-up and occasional monochrome.
+		// Unlock. Scanline break-up and occasional monochrome.
         float y = uv.y + rand(quantize(effectTime, 75.0/(effectAmount + 0.1)));
         y += 0.2 * rand(quantize(y, 0.077));
         float dx = rand(quantize(y + effectTime, 0.22));
@@ -224,17 +218,17 @@ void main() {
     else if (effectId == 6.0) {
         // Quicksilver. Fractal displacement.
         vec2 uv_noise = uv;
-        float dx = fractal(vec3(uv_noise, 0.057 * effectTime + 0.0), 0.25, 0.5, 2.0) - 0.5;
-        float dy = fractal(vec3(uv_noise, 0.042 * effectTime + 7.7), 0.25, 0.5, 2.0) - 0.5;
-        uv += 0.2 * effectAmount * vec2(dx, dy);
+        float dx = fractal(vec3(uv_noise, 0.057 * effectTime + 0.0), 0.3, 0.5, 2.0) - 0.5;
+        float dy = fractal(vec3(uv_noise, 0.042 * effectTime + 7.7), 0.3, 0.5, 2.0) - 0.5;
+        uv += 0.3 * effectAmount * vec2(dx, dy);
         fragColor = lookup(u_texture, uv);
     }
     
     else if (effectId == 7.0) {
         // Twist.
         float ar = 1.0;//iResolution.x / iResolution.y;
-        float inner = effectAmount * cos(1.0 * effectTime);
-        float outer = effectAmount * cos(0.2 * effectTime);
+        float inner = 2.0 * effectAmount * sin(2.0 * effectTime);
+        float outer = 2.0 * effectAmount * sin(0.0 * effectTime);
         float r = length(uv - 0.5);
         uv.y = (uv.y - 0.5) / ar + 0.5;
         uv = rotate(uv, 2.0 * PI * mix(inner, outer, r), vec2(0.5, 0.5));

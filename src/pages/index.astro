@@ -7,27 +7,45 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 <Layout>
 	<div id="container">
 		<canvas id="glCanvas"></canvas>
-		<div id="controls">
+		<button id="menuToggle" aria-label="Toggle menu">
+			<span></span>
+			<span></span>
+			<span></span>
+		</button>
+		<div id="controls" class="collapsed">
 			<h1>Magic Mirror</h1>
 			<div class="control-group">
 				<label>
-					Distortion Amount:
-					<input type="range" id="distortionAmount" min="0" max="100" value="30" />
-					<span id="distortionValue">30</span>
+					Effect:
+					<select id="effectSelector">
+						<option value="-1" selected>Cycle (all effects)</option>
+						<option value="0">Glitch</option>
+						<option value="1">Smear</option>
+						<option value="2">Projector</option>
+						<option value="3">Unlock</option>
+						<option value="4">Wobble</option>
+						<option value="5">Posterize</option>
+						<option value="6">Quicksilver</option>
+						<option value="7">Twist</option>
+						<option value="8">Smolder</option>
+						<option value="9">Blur</option>
+						<option value="10">Rainbow</option>
+						<option value="11">Smoke</option>
+					</select>
 				</label>
 			</div>
 			<div class="control-group">
 				<label>
-					Distortion Speed:
-					<input type="range" id="distortionSpeed" min="0" max="100" value="50" />
+					Effect Strength:
+					<input type="range" id="effectStrength" min="0" max="100" value="30" />
+					<span id="strengthValue">30</span>
+				</label>
+			</div>
+			<div class="control-group">
+				<label>
+					Effect Speed:
+					<input type="range" id="effectSpeed" min="0" max="100" value="50" />
 					<span id="speedValue">50</span>
-				</label>
-			</div>
-			<div class="control-group">
-				<label>
-					Color Shift:
-					<input type="range" id="colorShift" min="0" max="100" value="20" />
-					<span id="colorValue">20</span>
 				</label>
 			</div>
 		</div>
@@ -51,6 +69,37 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 		display: block;
 	}
 
+	#menuToggle {
+		position: absolute;
+		top: 20px;
+		right: 20px;
+		width: 50px;
+		height: 50px;
+		background: rgba(0, 0, 0, 0.7);
+		border: none;
+		border-radius: 10px;
+		cursor: pointer;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		gap: 6px;
+		z-index: 1001;
+		transition: background 0.3s ease;
+	}
+
+	#menuToggle:hover {
+		background: rgba(0, 0, 0, 0.85);
+	}
+
+	#menuToggle span {
+		width: 30px;
+		height: 3px;
+		background: white;
+		border-radius: 2px;
+		transition: all 0.3s ease;
+	}
+
 	#controls {
 		position: absolute;
 		top: 20px;
@@ -61,6 +110,14 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 		color: white;
 		font-family: Arial, sans-serif;
 		min-width: 250px;
+		transition: transform 0.3s ease, opacity 0.3s ease;
+		z-index: 1000;
+	}
+
+	#controls.collapsed {
+		transform: translateX(calc(100% + 20px));
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	h1 {
@@ -77,6 +134,22 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 		display: block;
 		font-size: 14px;
 		margin-bottom: 5px;
+	}
+
+	select {
+		padding: 5px;
+		background: rgba(255, 255, 255, 0.1);
+		color: white;
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		border-radius: 5px;
+		font-size: 14px;
+		cursor: pointer;
+		margin-left: 10px;
+	}
+
+	select option {
+		background: #333;
+		color: white;
 	}
 
 	input[type="range"] {
@@ -171,14 +244,14 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 			return;
 		}
 
-		// Look up attribute and uniform locations
-		const positionLocation = gl.getAttribLocation(program, 'a_position');
-		const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
-		const textureLocation = gl.getUniformLocation(program, 'u_texture');
-		const timeLocation = gl.getUniformLocation(program, 'u_time');
-		const distortionAmountLocation = gl.getUniformLocation(program, 'u_distortionAmount');
-		const distortionSpeedLocation = gl.getUniformLocation(program, 'u_distortionSpeed');
-		const colorShiftLocation = gl.getUniformLocation(program, 'u_colorShift');
+	// Look up attribute and uniform locations
+	const positionLocation = gl.getAttribLocation(program, 'a_position');
+	const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+	const textureLocation = gl.getUniformLocation(program, 'u_texture');
+	const timeLocation = gl.getUniformLocation(program, 'u_time');
+	const effectStrengthLocation = gl.getUniformLocation(program, 'u_effectStrength');
+	const effectSpeedLocation = gl.getUniformLocation(program, 'u_effectSpeed');
+	const effectIdLocation = gl.getUniformLocation(program, 'u_effectId');
 
 		// Create position buffer (full screen quad)
 		const positionBuffer = gl.createBuffer();
@@ -262,33 +335,46 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 				alert('Could not access webcam. Please grant camera permissions.');
 			});
 
-		// Control values
-		let distortionAmount = 30;
-		let distortionSpeed = 50;
-		let colorShift = 20;
+	// Control panel toggle
+	const menuToggle = document.getElementById('menuToggle');
+	const controls = document.getElementById('controls');
+	
+	menuToggle.addEventListener('click', () => {
+		controls.classList.toggle('collapsed');
+	});
 
-		// Set up control listeners
-		const distortionAmountInput = document.getElementById('distortionAmount');
-		const distortionSpeedInput = document.getElementById('distortionSpeed');
-		const colorShiftInput = document.getElementById('colorShift');
-		const distortionValue = document.getElementById('distortionValue');
-		const speedValue = document.getElementById('speedValue');
-		const colorValue = document.getElementById('colorValue');
+	// Close menu when clicking outside
+	document.addEventListener('click', (e) => {
+		if (!controls.contains(e.target) && !menuToggle.contains(e.target)) {
+			controls.classList.add('collapsed');
+		}
+	});
 
-		distortionAmountInput.addEventListener('input', (e) => {
-			distortionAmount = parseInt(e.target.value);
-			if (distortionValue) distortionValue.textContent = distortionAmount.toString();
-		});
+	// Control values
+	let effectId = -1.0; // Default to Cycle (all effects)
+	let effectStrength = 30;
+	let effectSpeed = 50;
 
-		distortionSpeedInput.addEventListener('input', (e) => {
-			distortionSpeed = parseInt(e.target.value);
-			if (speedValue) speedValue.textContent = distortionSpeed.toString();
-		});
+	// Set up control listeners
+	const effectSelector = document.getElementById('effectSelector');
+	const effectStrengthInput = document.getElementById('effectStrength');
+	const effectSpeedInput = document.getElementById('effectSpeed');
+	const strengthValue = document.getElementById('strengthValue');
+	const speedValue = document.getElementById('speedValue');
 
-		colorShiftInput.addEventListener('input', (e) => {
-			colorShift = parseInt(e.target.value);
-			if (colorValue) colorValue.textContent = colorShift.toString();
-		});
+	effectSelector.addEventListener('change', (e) => {
+		effectId = parseFloat(e.target.value);
+	});
+
+	effectStrengthInput.addEventListener('input', (e) => {
+		effectStrength = parseInt(e.target.value);
+		if (strengthValue) strengthValue.textContent = effectStrength.toString();
+	});
+
+	effectSpeedInput.addEventListener('input', (e) => {
+		effectSpeed = parseInt(e.target.value);
+		if (speedValue) speedValue.textContent = effectSpeed.toString();
+	});
 
 		// Render loop
 		let startTime = Date.now();
@@ -308,12 +394,12 @@ import fragmentShaderSource from '../shaders/fragment.glsl?raw';
 			// Use program
 			gl.useProgram(program);
 
-			// Set uniforms
-			gl.uniform1i(textureLocation, 0);
-			gl.uniform1f(timeLocation, currentTime);
-			gl.uniform1f(distortionAmountLocation, distortionAmount);
-			gl.uniform1f(distortionSpeedLocation, distortionSpeed);
-			gl.uniform1f(colorShiftLocation, colorShift);
+		// Set uniforms
+		gl.uniform1i(textureLocation, 0);
+		gl.uniform1f(timeLocation, currentTime);
+		gl.uniform1f(effectStrengthLocation, effectStrength);
+		gl.uniform1f(effectSpeedLocation, effectSpeed);
+		gl.uniform1f(effectIdLocation, effectId);
 
 			// Set position attribute
 			gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
