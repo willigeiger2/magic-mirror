@@ -118,7 +118,7 @@ float smoke(vec2 uv, float t) {
 void main() {
 	// Map the effect speed parameter to get a larger, logarithmic range and generate a scaled time value.
 	float effectSpeed = u_effectSpeed / 100.0;
-	const float logSpeedScale = 10.0;
+	const float logSpeedScale = 5.0;
 	effectSpeed = 0.5 * exp(logSpeedScale * effectSpeed) / exp(logSpeedScale * 0.5);
 	float effectTime = u_time * effectSpeed;
     
@@ -142,6 +142,7 @@ void main() {
 	}
     
     if (effectId == 0.0) {
+		// Glitch.
 		float scalineDistortion = 1.0 * 0.008;
 		float scanError = 1.0 * 0.5;
 		float verticalShake = 1.0 * 0.5;
@@ -154,7 +155,7 @@ void main() {
 		fragColor = (effectAmount * negative > rand(floor(10.0 * effectTime)))
 			? vec4(vec3(1.0) - fragColor.rgb, 1.0) : fragColor;
         fragColor += effectAmount * scanlines * rand(uv) *
-                     cos(7734.0 * uv.y + 20.0 * effectTime + 2.0 *
+                     cos(77347.87 * uv.y + 20.0 * effectTime + 2.0 *
                      (rand(quantize(uv.x, 0.007)) - 0.5));
     }
     
