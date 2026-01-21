@@ -123,11 +123,9 @@ void main() {
     
     // Cycle through the available transition effects.
     //float effectId = mod(floor(iTime / clipDuration + 0.5), 11.0);
-    float effectId = 11.0;
+    float effectId = 2.0;
  
-	if (u_distortionSpeed > 0.0) {
-		effectId = mod(floor(0.005 * u_time * u_distortionSpeed + 0.5), 12.0);
-	}
+	//effectId = mod(floor(0.005 * u_time * u_distortionSpeed + effectId + 0.5), 12.0);
    
     // Normalized pixel coordinates (from 0 to 1).
 	vec2 uv = v_texCoord;
@@ -141,13 +139,10 @@ void main() {
         t += 0.25 * transDuration * (rand(quantize(t, 0.157)) - 0.5);
 	}
     
-    // Normalized transition time 0..1.
-    //float effectTime = mod(t + 0.5 * clipDuration, clipDuration) / clipDuration;
-    //effectTime = clamp((effectTime - 0.5) * (clipDuration / transDuration) + 0.5, 0.0, 1.0);
+    // Used for effect animation.
 	float effectTime = t * u_distortionSpeed / 100.0;
     
-    // Transition intensity, 0.0 at start/end of transition, 1.0 in middle.
-    //float effectAmount = pow(0.5 * (cos(2.0 * PI * (effectTime - 0.5)) + 1.0), 1.0);
+    // Normalized (0..1 effect intensity)
 	float effectAmount = u_distortionAmount / 100.0;
     
     if (effectId == 0.0) {
@@ -180,10 +175,10 @@ void main() {
     
     else if (effectId == 2.0) {
 		// Projector: Random streaking from image center.
-        vec2 streak = 1.5 * (uv - vec2(0.5, 0.5));
-        streak += 0.6 * vec2(cos(2.8 * effectTime), cos(1.3 * effectTime));
+        vec2 streak = uv - vec2(0.5, 0.5);
+        streak += vec2(cos(3.8 * effectTime), cos(2.3 * effectTime));
         float ditherAmount = rand(quantize(effectTime, 0.44));
-        streak *= effectAmount * 0.2;
+        streak *= effectAmount * 0.1;
         fragColor = dirblur(u_texture, uv, streak, ditherAmount, 0.5);
     }
 
@@ -192,7 +187,7 @@ void main() {
         float y = uv.y + rand(quantize(effectTime, 75.0/(effectAmount + 0.1)));
         y += 0.2 * rand(quantize(y, 0.077));
         float dx = rand(quantize(y + effectTime, 0.22));
-        float dy = effectTime;
+        float dy = 3.0 * effectTime * effectAmount;
         uv.x += 1.0 * effectAmount * (dx - 0.5);
         uv.y = mod(uv.y + dy, 1.0);
         fragColor = lookup(u_texture, uv);
@@ -202,6 +197,7 @@ void main() {
     }
     
     else if (effectId == 4.0) {
+		// Wobble. Sinusoidal distortion.
  		uv.x += 0.15 * effectAmount * cos(3.7 * uv.y + 0.7 * effectTime);
         uv.y += 0.15 * effectAmount * cos(3.7 * uv.x + 1.9 * effectTime);
 		uv.x += 0.05 * effectAmount * cos(13.0 * uv.y + 2.1 * effectTime);
@@ -212,19 +208,21 @@ void main() {
     }
     
     else if (effectId == 5.0) {
-        // Posterized (test/example).
-        const float q = 0.2;
-        float dr = fractal(vec3(uv, 0.257 * effectTime + 0.0), 0.25, 0.5, 2.0) - 0.5;
-        float dg = fractal(vec3(uv, 0.242 * effectTime + 7.7), 0.25, 0.5, 2.0) - 0.5;
-        float db = fractal(vec3(uv, 0.247 * effectTime + 5.3), 0.25, 0.5, 2.0) - 0.5;
-        float r = quantize(fragColor.r + 1.0 * q * dr, q);
-        float g = quantize(fragColor.g + 1.0 * q * dg, q);
-        float b = quantize(fragColor.b + 1.0 * q * db, q);
-        fragColor.rgb = vec3(r, g, b);
+        // Posterize.
+		if (effectAmount > 0.0) {
+			float q = mix(0.004, 1.0, pow(effectAmount, 1.7));
+			float dr = fractal(vec3(uv, 0.257 * effectTime + 0.0), 0.25, 0.5, 2.0) - 0.5;
+			float dg = fractal(vec3(uv, 0.242 * effectTime + 7.7), 0.25, 0.5, 2.0) - 0.5;
+			float db = fractal(vec3(uv, 0.247 * effectTime + 5.3), 0.25, 0.5, 2.0) - 0.5;
+			float r = quantize(fragColor.r + 1.0 * q * dr, q);
+			float g = quantize(fragColor.g + 1.0 * q * dg, q);
+			float b = quantize(fragColor.b + 1.0 * q * db, q);
+			fragColor.rgb = vec3(r, g, b);
+		}
    }
     
     else if (effectId == 6.0) {
-        // Fractal displacement.
+        // Quicksilver. Fractal displacement.
         vec2 uv_noise = uv;
         float dx = fractal(vec3(uv_noise, 0.057 * effectTime + 0.0), 0.25, 0.5, 2.0) - 0.5;
         float dy = fractal(vec3(uv_noise, 0.042 * effectTime + 7.7), 0.25, 0.5, 2.0) - 0.5;
@@ -266,6 +264,7 @@ void main() {
     }
     
     else if (effectId == 10.0) {
+		// Rainbow. Adds fractal colors, additive and subtractive.
         float amount = 2.0 * effectAmount;
         float dr = fractal(vec3(uv, 0.257 * effectTime + 0.0), 0.35, 0.5, 2.0) - 0.5;
         float dg = fractal(vec3(uv, 0.242 * effectTime + 7.7), 0.35, 0.5, 2.0) - 0.5;
@@ -274,6 +273,7 @@ void main() {
    }
     
     else if (effectId == 11.0) {
+		// Smoke.
         const float loopLength = 30.0;
         float t0 = mod(2.0 * effectTime, loopLength);
         float t1 = mod(2.0 * effectTime + 0.5 * loopLength, loopLength);
